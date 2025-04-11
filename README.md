@@ -218,6 +218,16 @@ brew install mas
 mas install 1121012695  # WaterMinder app ID
 ```
 
+
+### Spotify - Music 
+
+
+**Why I use it:** 
+
+**Installation:**
+```bash
+brew install --cask spotify
+```
 ## Complete Setup Script
 
 Here's a complete script to install all the command-line installable tools mentioned above:
@@ -250,6 +260,7 @@ brew install --cask nordvpn
 brew install --cask bitwarden
 brew install --cask signal
 brew install --cask bartender
+brew install --cask spotify
 
 # Install Oh My Zsh
 echo "Installing Oh My Zsh..."
