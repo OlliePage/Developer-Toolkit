@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhichMac Plan</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --fg: #1d1d1f; --muted: #6e6e73; --rule: #e3e3e0; --card: #ffffff;
+    --accent: #0a66c2; --code-bg: #f3f3f1; --code-fg: #1d1d1f; --note-bg: #eef5fc; --warn-bg: #fff6e5; --warn-rule: #e8b64c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161617; --fg: #ececec; --muted: #9a9aa0; --rule: #2e2e31; --card: #1e1e20;
+      --accent: #5aa9ff; --code-bg: #232326; --code-fg: #e6e6e6; --note-bg: #17222e; --warn-bg: #2a2416; --warn-rule: #a8823a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 48px 16px 96px; }
+  header { border-bottom: 1px solid var(--rule); padding-bottom: 20px; margin-bottom: 28px; }
+  h1 { font-size: 32px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .meta { color: var(--muted); font-size: 14px; }
+  h2 { font-size: 21px; margin: 44px 0 14px; }
+  h3 { font-size: 16px; margin: 24px 0 8px; }
+  p, ul, ol { margin: 0 0 14px; }
+  li { margin-bottom: 6px; }
+  code { font: 0.87em ui-monospace, "SF Mono", Menlo, monospace; background: var(--code-bg); padding: 1px 5px; border-radius: 4px; }
+  pre { background: var(--code-bg); color: var(--code-fg); border: 1px solid var(--rule); border-radius: 8px;
+    padding: 12px 14px; overflow-x: auto; margin: 8px 0 12px; }
+  pre code { background: none; padding: 0; font-size: 13px; line-height: 1.5; }
+  .summary { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 16px 20px; }
+  .summary dt { font-weight: 600; margin-top: 8px; }
+  .summary dt:first-child { margin-top: 0; }
+  .summary dd { margin: 2px 0 0; }
+  .note { background: var(--note-bg); border-left: 4px solid var(--accent); border-radius: 6px; padding: 10px 14px; font-size: 15px; }
+  .warn { background: var(--warn-bg); border-left: 4px solid var(--warn-rule); border-radius: 6px; padding: 10px 14px; font-size: 15px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .task { border-top: 1px solid var(--rule); margin-top: 40px; }
+  .num { display: inline-block; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: var(--accent); border: 1px solid var(--accent); border-radius: 4px; padding: 0 6px; margin-right: 8px; vertical-align: 3px; }
+  .files { background: var(--card); border: 1px solid var(--rule); border-radius: 8px; padding: 12px 18px; margin-bottom: 14px; }
+  .files p { margin: 6px 0 4px; }
+  .steps { list-style: none; padding: 0; }
+  .step { margin: 0 0 18px; }
+  .step input { margin-right: 6px; }
+  .run { margin: 6px 0 0; color: var(--muted); font-size: 14px; }
+  .expect { font-size: 15px; }
+  .expect span { color: var(--muted); }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; vertical-align: top; padding: 8px 10px; border-bottom: 1px solid var(--rule); }
+  th { color: var(--muted); font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .table-wrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>WhichMac: implementation plan</h1>
+  <div class="meta">2026-09-25 · spec <code>docs/superpowers/specs/2026-09-25-which-mac-design.html</code> · branch <code>build-menu-bar-app</code></div>
+</header>
+
+<p class="note"><strong>For agentic workers:</strong> REQUIRED SUB-SKILL: use superpowers:subagent-driven-development or superpowers:executing-plans to carry out this plan task by task. Work only inside <code>/Users/ollie/Developer/worktrees/which-mac/build</code>, and never edit the main checkout at <code>/Users/ollie/Developer/which-mac</code>.</p>
+
+<dl class="summary">
+  <dt>Goal</dt><dd>A menu bar app that shows the current Mac's Computer Name, so a glance tells you which machine you're on.</dd>
+  <dt>Architecture</dt><dd>One AppKit status item with no Dock icon and no windows, built with plain <code>swiftc</code>, with no Xcode project. The only real logic, picking the name and shortening it, is in a pure Swift file with its own test executable. The rest is AppKit wiring, checked by building and running it.</dd>
+  <dt>Tech stack</dt><dd>Swift 6.4 (<code>swiftc</code> from the Xcode 27 command line tools), AppKit, ServiceManagement (<code>SMAppService</code>), SystemConfiguration, and bash scripts.</dd>
+  <dt>Spec</dt><dd><code>docs/superpowers/specs/2026-09-25-which-mac-design.html</code></dd>
+</dl>
+
+<h2>Global constraints</h2>
+<ul>
+  <li>App name <code>WhichMac</code>, executable <code>WhichMac</code>, app ID <code>com.ollie.whichmac</code>.</li>
+  <li>Minimum macOS <code>13.0</code> (<code>LSMinimumSystemVersion</code> and the <code>-target …-apple-macos13.0</code> flag).</li>
+  <li>A universal binary, <code>x86_64 arm64</code>, signed locally (<code>codesign --sign -</code>).</li>
+  <li><code>LSUIElement = true</code>: no Dock icon and no windows.</li>
+  <li>Menu items in this order: full name (greyed out), divider, <strong>Open at Login</strong>, <strong>Quit WhichMac</strong> (⌘Q).</li>
+  <li>No third-party dependencies.</li>
+</ul>
+
+<h2>Differences from the spec</h2>
+<div class="warn">
+<ul style="margin:0">
+  <li><strong>How the name is read:</strong> the plan uses <code>SCDynamicStoreCopyComputerName</code> instead of <code>Host.current().localizedName</code>. It returns the same Computer Name, but <code>Host.current()</code> does network lookups and can hang for seconds on a slow or VPN network.</li>
+  <li><strong>The app shortens long names itself, to 32 characters with <code>…</code>:</strong> the spec assumed the bar would truncate long names. In fact macOS doesn't truncate a menu bar item; it hides the whole item. The full name is still in the menu.</li>
+  <li><strong>New <code>--disable-login-item</code> flag:</strong> <code>uninstall.sh</code> needs a way to turn off Open at Login before deleting the app, because only the app itself can unregister.</li>
+  <li><strong>Menu bar position is remembered:</strong> <code>statusItem.autosaveName</code> is set, so macOS keeps the ⌘-drag position even across reinstalls.</li>
+</ul>
+</div>
+
+<h2>Review focus</h2>
+<p>Cases the spec implies but doesn't spell out, most likely first, and the task that pins each one:</p>
+<div class="table-wrap">
+<table>
+<thead><tr><th>#</th><th>Input or condition</th><th>Expected behaviour</th><th>Pinned by</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>The name is too long for the bar, e.g. <code>[OP] Office Mac mini (Upstairs, spare)</code></td><td>The bar shows the first 31 characters plus <code>…</code>, and the menu shows the full name</td><td>Task 1 tests (limit, over limit, trailing space)</td></tr>
+<tr><td>2</td><td>Computer Name is blank or can't be read</td><td>Shows the host name without <code>.local</code>, and <code>Unknown Mac</code> if that's empty too, never an empty item</td><td>Task 1 tests (nil, blank, both empty)</td></tr>
+<tr><td>3</td><td>Computer Name has stray spaces or a newline around it</td><td>Trimmed, so no invisible padding widens the item</td><td>Task 1 test (trims whitespace)</td></tr>
+<tr><td>4</td><td><code>install.sh</code> is run while an older copy is running</td><td>The old copy quits, and exactly one new copy ends up in the menu bar</td><td>Task 3 Step 7</td></tr>
+<tr><td>5</td><td>The Mac is renamed while the app is running</td><td>The bar updates the next time you click the item (<code>menuNeedsUpdate</code> → <code>refresh()</code>)</td><td>Task 2 code (renaming needs admin rights and would change your real setting, so this is checked by code review, not by running it)</td></tr>
+</tbody>
+</table>
+</div>
+
+<h2>Tasks</h2>
+<ol class="toc">
+  <li><a href="#task-1">Name formatting logic, with tests</a></li>
+  <li><a href="#task-2">Menu bar app and build script</a></li>
+  <li><a href="#task-3">Install, uninstall and README</a></li>
+</ol>
+
+<h3>Final file layout</h3>
+<pre><code class="">which-mac/
+├── .gitignore
+├── README.md
+├── build.sh
+├── install.sh
+├── test.sh
+├── uninstall.sh
+├── Resources/
+│   └── Info.plist
+├── Sources/
+│   ├── NameFormatting.swift   # resolvedName, menuBarTitle (pure, tested)
+│   └── main.swift             # AppDelegate + entry point
+├── Tests/
+│   └── main.swift             # test executable for NameFormatting.swift
+└── docs/superpowers/
+    ├── specs/2026-09-25-which-mac-design.html
+    └── plans/2026-09-25-which-mac.html</code></pre>
+
+
+<section class="task" id="task-1">
+<h2><span class="num">Task 1</span> Name formatting logic, with tests</h2>
+<div class="files">
+<p><strong>Files</strong></p>
+<ul>
+<li>Create: <code>.gitignore</code></li>
+<li>Create: <code>Sources/NameFormatting.swift</code></li>
+<li>Create: <code>Tests/main.swift</code></li>
+<li>Create: <code>test.sh</code></li>
+</ul>
+<p><strong>Interfaces</strong></p>
+<ul>
+<li>Consumes: nothing.</li>
+<li>Produces (used by Task 2):
+<ul>
+<li><code>func resolvedName(computerName: String?, hostName: String) -&gt; String</code>: the full name. It uses the trimmed Computer Name if that has any visible characters. Otherwise it uses the trimmed host name without <code>.local</code>, and if that's empty too, <code>"Unknown Mac"</code>.</li>
+<li><code>func menuBarTitle(for name: String, maxLength: Int = 32) -&gt; String</code>: returns <code>name</code> unchanged if it's at most <code>maxLength</code> characters. Otherwise it keeps the first <code>maxLength - 1</code> characters, drops any trailing space, and adds <code>…</code>.</li>
+</ul></li>
+</ul>
+</div>
+<p class="note">The tests are a plain Swift executable, <code>Tests/main.swift</code>, compiled alongside the logic file and run by <code>test.sh</code>. That avoids needing an Xcode project or XCTest. Compile the test binary into <code>build/</code>. macOS filenames ignore case, so a binary called <code>tests</code> at the repo root would clash with the <code>Tests/</code> folder.</p>
+<ol class="steps">
+<li class="step"><input type="checkbox" disabled> <strong>Step 1: Create <code>.gitignore</code></strong><pre><code class="">build/</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 2: Write the failing tests: <code>Tests/main.swift</code></strong><pre><code class="swift">import Foundation
+
+var failures = 0
+
+func expect(_ actual: String, _ expected: String, _ label: String) {
+    if actual == expected {
+        print(&quot;PASS  \(label)&quot;)
+    } else {
+        print(&quot;FAIL  \(label)\n      expected: \(expected.debugDescription)\n      actual:   \(actual.debugDescription)&quot;)
+        failures += 1
+    }
+}
+
+expect(resolvedName(computerName: &quot;[OP] MacBook Air M2&quot;, hostName: &quot;op-air.local&quot;), &quot;[OP] MacBook Air M2&quot;, &quot;uses the Computer Name&quot;)
+expect(resolvedName(computerName: &quot;  Studio\n&quot;, hostName: &quot;studio.local&quot;), &quot;Studio&quot;, &quot;trims whitespace around the Computer Name&quot;)
+expect(resolvedName(computerName: nil, hostName: &quot;op-air.local&quot;), &quot;op-air&quot;, &quot;falls back to host name without .local when Computer Name is missing&quot;)
+expect(resolvedName(computerName: &quot;   &quot;, hostName: &quot;op-air.local&quot;), &quot;op-air&quot;, &quot;falls back to host name when Computer Name is blank&quot;)
+expect(resolvedName(computerName: nil, hostName: &quot;&quot;), &quot;Unknown Mac&quot;, &quot;says Unknown Mac when both are empty&quot;)
+expect(menuBarTitle(for: &quot;[OP] MacBook Air M2&quot;), &quot;[OP] MacBook Air M2&quot;, &quot;short names are unchanged&quot;)
+expect(menuBarTitle(for: String(repeating: &quot;a&quot;, count: 32)), String(repeating: &quot;a&quot;, count: 32), &quot;a name exactly at the limit is unchanged&quot;)
+expect(menuBarTitle(for: String(repeating: &quot;a&quot;, count: 40)), String(repeating: &quot;a&quot;, count: 31) + &quot;…&quot;, &quot;long names are cut to 32 characters with an ellipsis&quot;)
+expect(menuBarTitle(for: &quot;Office Mac mini &quot; + String(repeating: &quot;x&quot;, count: 30)), &quot;Office Mac mini &quot; + String(repeating: &quot;x&quot;, count: 15) + &quot;…&quot;, &quot;keeps 31 characters then adds the ellipsis&quot;)
+
+expect(menuBarTitle(for: String(repeating: &quot;a&quot;, count: 30) + &quot; bbbbb&quot;), String(repeating: &quot;a&quot;, count: 30) + &quot;…&quot;, &quot;drops a trailing space before the ellipsis&quot;)
+
+if failures &gt; 0 {
+    print(&quot;\(failures) failed&quot;)
+    exit(1)
+}
+print(&quot;All passed&quot;)</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 3: Create <code>test.sh</code> and make it executable</strong><pre><code class="sh">#!/bin/bash
+# Compiles the name-formatting logic together with its tests and runs them.
+set -euo pipefail
+cd &quot;$(dirname &quot;$0&quot;)&quot;
+mkdir -p build
+xcrun swiftc Sources/NameFormatting.swift Tests/main.swift -o build/name-tests
+./build/name-tests</code></pre><pre><code class="sh">chmod +x test.sh</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 4: Run the tests and confirm they fail</strong><p class="run">Run:</p><pre><code class="sh">./test.sh</code></pre><p class="expect"><span>Expected:</span> a non-zero exit, with <code>swiftc</code> reporting <code>error: error opening input file 'Sources/NameFormatting.swift' (No such file or directory)</code>. The tests can't build until the logic exists.</p></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 5: Implement <code>Sources/NameFormatting.swift</code></strong><pre><code class="swift">import Foundation
+
+/// The machine&#x27;s full name: the Computer Name if it has any visible characters,
+/// otherwise the host name without its `.local` suffix, otherwise &quot;Unknown Mac&quot;.
+func resolvedName(computerName: String?, hostName: String) -&gt; String {
+    let computer = (computerName ?? &quot;&quot;).trimmingCharacters(in: .whitespacesAndNewlines)
+    if !computer.isEmpty { return computer }
+    var host = hostName.trimmingCharacters(in: .whitespacesAndNewlines)
+    if host.hasSuffix(&quot;.local&quot;) { host.removeLast(&quot;.local&quot;.count) }
+    return host.isEmpty ? &quot;Unknown Mac&quot; : host
+}
+
+/// The menu bar text: `name`, cut to `maxLength` characters with a trailing &quot;…&quot; when longer.
+func menuBarTitle(for name: String, maxLength: Int = 32) -&gt; String {
+    guard name.count &gt; maxLength else { return name }
+    let kept = name.prefix(maxLength - 1).trimmingCharacters(in: .whitespaces)
+    return kept + &quot;…&quot;
+}</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 6: Run the tests and confirm they pass</strong><p class="run">Run:</p><pre><code class="sh">./test.sh</code></pre><p class="expect"><span>Expected:</span> 10 <code>PASS</code> lines, then <code>All passed</code>, exit code 0.</p></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 7: Commit</strong><pre><code class="sh">git add .gitignore Sources/NameFormatting.swift Tests/main.swift test.sh
+git commit -m &quot;Add name formatting with tests
+
+Co-Authored-By: Claude Opus 5.5 (1M context) &lt;noreply@anthropic.com&gt;&quot;</code></pre></li>
+</ol>
+</section>
+
+
+<section class="task" id="task-2">
+<h2><span class="num">Task 2</span> Menu bar app and build script</h2>
+<div class="files">
+<p><strong>Files</strong></p>
+<ul>
+<li>Create: <code>Sources/main.swift</code></li>
+<li>Create: <code>Resources/Info.plist</code></li>
+<li>Create: <code>build.sh</code></li>
+</ul>
+<p><strong>Interfaces</strong></p>
+<ul>
+<li>Consumes: <code>resolvedName(computerName:hostName:)</code> and <code>menuBarTitle(for:maxLength:)</code> from Task 1.</li>
+<li>Produces (used by Task 3):
+<ul>
+<li><code>build/WhichMac.app</code>, produced by <code>./build.sh</code>.</li>
+<li>Launch flag <code>--enable-login-item</code>: registers <code>SMAppService.mainApp</code>, then runs normally.</li>
+<li>Launch flag <code>--disable-login-item</code>: unregisters it, then quits straight away without showing anything.</li>
+<li>Process name <code>WhichMac</code>, app ID <code>com.ollie.whichmac</code>.</li>
+</ul></li>
+</ul>
+</div>
+<p class="note">Everything the app does is AppKit wiring around Task 1's tested functions, so this task is verified by building and running it rather than by unit tests. The top-level code is wrapped in <code>MainActor.assumeIsolated</code> because Swift 6.4 doesn't treat <code>main.swift</code> top-level code as main-thread code. Without the wrapper the compiler rejects the <code>AppDelegate()</code> call. The code below has been compiled for arm64 and x86_64, and in Swift 6 language mode, with no warnings.</p>
+<ol class="steps">
+<li class="step"><input type="checkbox" disabled> <strong>Step 1: Create <code>Resources/Info.plist</code></strong><pre><code class="xml">&lt;?xml version=&quot;1.0&quot; encoding=&quot;UTF-8&quot;?&gt;
+&lt;!DOCTYPE plist PUBLIC &quot;-//Apple//DTD PLIST 1.0//EN&quot; &quot;http://www.apple.com/DTDs/PropertyList-1.0.dtd&quot;&gt;
+&lt;plist version=&quot;1.0&quot;&gt;
+&lt;dict&gt;
+    &lt;key&gt;CFBundleIdentifier&lt;/key&gt;
+    &lt;string&gt;com.ollie.whichmac&lt;/string&gt;
+    &lt;key&gt;CFBundleName&lt;/key&gt;
+    &lt;string&gt;WhichMac&lt;/string&gt;
+    &lt;key&gt;CFBundleDisplayName&lt;/key&gt;
+    &lt;string&gt;WhichMac&lt;/string&gt;
+    &lt;key&gt;CFBundleExecutable&lt;/key&gt;
+    &lt;string&gt;WhichMac&lt;/string&gt;
+    &lt;key&gt;CFBundlePackageType&lt;/key&gt;
+    &lt;string&gt;APPL&lt;/string&gt;
+    &lt;key&gt;CFBundleShortVersionString&lt;/key&gt;
+    &lt;string&gt;1.0&lt;/string&gt;
+    &lt;key&gt;CFBundleVersion&lt;/key&gt;
+    &lt;string&gt;1&lt;/string&gt;
+    &lt;key&gt;LSMinimumSystemVersion&lt;/key&gt;
+    &lt;string&gt;13.0&lt;/string&gt;
+    &lt;key&gt;LSUIElement&lt;/key&gt;
+    &lt;true/&gt;
+&lt;/dict&gt;
+&lt;/plist&gt;</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 2: Create <code>Sources/main.swift</code></strong><pre><code class="swift">import AppKit
+import ServiceManagement
+import SystemConfiguration
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    private var statusItem: NSStatusItem!
+    private let nameItem = NSMenuItem(title: &quot;&quot;, action: nil, keyEquivalent: &quot;&quot;)
+    private let loginItem = NSMenuItem(title: &quot;Open at Login&quot;, action: nil, keyEquivalent: &quot;&quot;)
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let args = CommandLine.arguments
+        if args.contains(&quot;--disable-login-item&quot;) {
+            setLoginItem(enabled: false)
+            NSApp.terminate(nil)
+            return
+        }
+        if args.contains(&quot;--enable-login-item&quot;) {
+            setLoginItem(enabled: true)
+        }
+
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.autosaveName = &quot;WhichMacName&quot;
+
+        let menu = NSMenu()
+        menu.delegate = self
+        nameItem.isEnabled = false
+        loginItem.action = #selector(toggleLoginItem)
+        loginItem.target = self
+        menu.addItem(nameItem)
+        menu.addItem(.separator())
+        menu.addItem(loginItem)
+        menu.addItem(NSMenuItem(title: &quot;Quit WhichMac&quot;, action: #selector(NSApplication.terminate(_:)), keyEquivalent: &quot;q&quot;))
+        statusItem.menu = menu
+
+        refresh()
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        refresh()
+    }
+
+    private func refresh() {
+        let computerName = SCDynamicStoreCopyComputerName(nil, nil) as String?
+        let name = resolvedName(computerName: computerName, hostName: ProcessInfo.processInfo.hostName)
+        statusItem.button?.title = menuBarTitle(for: name)
+        nameItem.title = name
+        loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+    }
+
+    @objc private func toggleLoginItem() {
+        setLoginItem(enabled: SMAppService.mainApp.status != .enabled)
+        refresh()
+    }
+
+    private func setLoginItem(enabled: Bool) {
+        do {
+            if enabled {
+                try SMAppService.mainApp.register()
+            } else {
+                try SMAppService.mainApp.unregister()
+            }
+        } catch {
+            NSLog(&quot;WhichMac: could not %@ login item: %@&quot;, enabled ? &quot;enable&quot; : &quot;disable&quot;, error.localizedDescription)
+        }
+    }
+}
+
+// Top-level code runs on the main thread; tell the compiler so AppKit calls are allowed.
+MainActor.assumeIsolated {
+    let app = NSApplication.shared
+    let delegate = AppDelegate()
+    app.delegate = delegate
+    app.setActivationPolicy(.accessory)
+    app.run()
+}</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 3: Create <code>build.sh</code> and make it executable</strong><pre><code class="sh">#!/bin/bash
+# Builds build/WhichMac.app: one universal (Apple Silicon + Intel) binary, ad-hoc signed.
+set -euo pipefail
+cd &quot;$(dirname &quot;$0&quot;)&quot;
+
+APP=build/WhichMac.app
+rm -rf &quot;$APP&quot; build/obj
+mkdir -p &quot;$APP/Contents/MacOS&quot; build/obj
+
+for arch in arm64 x86_64; do
+    xcrun swiftc -O -target &quot;$arch-apple-macos13.0&quot; Sources/*.swift -o &quot;build/obj/WhichMac-$arch&quot;
+done
+lipo -create build/obj/WhichMac-arm64 build/obj/WhichMac-x86_64 -output &quot;$APP/Contents/MacOS/WhichMac&quot;
+cp Resources/Info.plist &quot;$APP/Contents/Info.plist&quot;
+codesign --force --sign - &quot;$APP&quot;
+
+echo &quot;Built $APP&quot;</code></pre><pre><code class="sh">chmod +x build.sh</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 4: Build</strong><p class="run">Run:</p><pre><code class="sh">./build.sh</code></pre><p class="expect"><span>Expected:</span> ends with <code>Built build/WhichMac.app</code>, with no compiler warnings.</p></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 5: Check it's a universal binary with a valid signature</strong><p class="run">Run:</p><pre><code class="sh">lipo -archs build/WhichMac.app/Contents/MacOS/WhichMac
+codesign -v build/WhichMac.app &amp;&amp; echo signed-ok</code></pre><p class="expect"><span>Expected:</span> <code>x86_64 arm64</code>, then <code>signed-ok</code>.</p></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 6: Run it and look at the menu bar</strong><p class="run">Run:</p><pre><code class="sh">open build/WhichMac.app
+sleep 2
+pgrep -x WhichMac
+screencapture -x build/menubar.png</code></pre><p class="expect"><span>Expected:</span> <code>pgrep</code> prints one process ID. In <code>build/menubar.png</code> (view it with the Read tool), the menu bar shows the output of <code>scutil --get ComputerName</code> as text, and there's no WhichMac icon in the Dock. If the screenshot shows only the wallpaper (Screen Recording permission hasn't been granted), ask the user to look at the menu bar and confirm.</p></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 7: Check the menu contents (the user clicks the item)</strong><p>Ask the user to click the name. The menu should list: the full name (greyed out), a divider, <strong>Open at Login</strong> (unticked for now), and <strong>Quit WhichMac</strong>. Then quit it:</p><pre><code class="sh">pkill -x WhichMac</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 8: Commit</strong><pre><code class="sh">git add Sources/main.swift Resources/Info.plist build.sh
+git commit -m &quot;Add menu bar app and build script
+
+Co-Authored-By: Claude Opus 5.5 (1M context) &lt;noreply@anthropic.com&gt;&quot;</code></pre></li>
+</ol>
+</section>
+
+
+<section class="task" id="task-3">
+<h2><span class="num">Task 3</span> Install, uninstall and README</h2>
+<div class="files">
+<p><strong>Files</strong></p>
+<ul>
+<li>Create: <code>install.sh</code></li>
+<li>Create: <code>uninstall.sh</code></li>
+<li>Create: <code>README.md</code> (stays Markdown by convention)</li>
+</ul>
+<p><strong>Interfaces</strong></p>
+<ul>
+<li>Consumes: <code>./build.sh</code>, <code>build/WhichMac.app</code>, the <code>--enable-login-item</code> and <code>--disable-login-item</code> flags, and process name <code>WhichMac</code> (all from Task 2).</li>
+<li>Produces: the installed <code>/Applications/WhichMac.app</code>, registered to open at login.</li>
+</ul>
+</div>
+<ol class="steps">
+<li class="step"><input type="checkbox" disabled> <strong>Step 1: Create <code>install.sh</code></strong><pre><code class="sh">#!/bin/bash
+# Builds WhichMac, replaces any installed copy in /Applications, launches it and turns on Open at Login.
+# Safe to run again.
+set -euo pipefail
+cd &quot;$(dirname &quot;$0&quot;)&quot;
+
+./build.sh
+
+# Quit a running copy so the new one launches fresh instead of `open` re-activating the old one.
+if pgrep -x WhichMac &gt;/dev/null; then
+    pkill -x WhichMac
+    for _ in {1..50}; do
+        pgrep -x WhichMac &gt;/dev/null || break
+        sleep 0.1
+    done
+    pkill -9 -x WhichMac 2&gt;/dev/null || true
+fi
+
+rm -rf /Applications/WhichMac.app
+cp -R build/WhichMac.app /Applications/
+open /Applications/WhichMac.app --args --enable-login-item
+
+echo &quot;Installed. ⌘-drag the name to the left end of the menu bar icons to place it.&quot;</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 2: Create <code>uninstall.sh</code></strong><pre><code class="sh">#!/bin/bash
+# Turns off Open at Login, quits WhichMac and removes it from /Applications.
+set -euo pipefail
+
+APP=/Applications/WhichMac.app
+
+pkill -x WhichMac 2&gt;/dev/null || true
+if [ -d &quot;$APP&quot; ]; then
+    # Launch the installed copy once so it unregisters its own login item; it quits straight away.
+    open -W -n &quot;$APP&quot; --args --disable-login-item
+    rm -rf &quot;$APP&quot;
+fi
+
+echo &quot;WhichMac removed.&quot;</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 3: Make both executable</strong><pre><code class="sh">chmod +x install.sh uninstall.sh</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 4: Create <code>README.md</code></strong><pre><code class="md"># WhichMac
+
+Shows this Mac&#x27;s name in the menu bar, so you always know which machine you&#x27;re
+on — handy when hopping between Macs over Jump Desktop.
+
+The text is the **Computer Name** from System Settings → General → Sharing.
+Click it for the full name, an **Open at Login** switch, and **Quit**.
+
+## Install
+
+```sh
+./install.sh
+```
+
+Builds the app (needs the Xcode command line tools: `xcode-select --install`),
+copies it to `/Applications`, launches it and turns on Open at Login. Safe to
+re-run to update.
+
+The built app runs on Apple Silicon and Intel. To install on a Mac without the
+command line tools, copy `build/WhichMac.app` to its `/Applications` and open it
+once, then tick **Open at Login** in its menu.
+
+### Put it on the left
+
+macOS only lets apps add items to the right-hand group of the menu bar. Hold
+**⌘** and drag the name to the left end of that group; macOS remembers the spot.
+
+On a notched or crowded menu bar, macOS hides items that don&#x27;t fit — if the
+name disappears, free up space by removing other menu bar icons.
+
+## Uninstall
+
+```sh
+./uninstall.sh
+```
+
+## Develop
+
+```sh
+./test.sh    # name-formatting tests
+./build.sh   # build/WhichMac.app
+```</code></pre></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 5: Install and check exactly one copy is running</strong><p class="run">Run:</p><pre><code class="sh">./install.sh
+sleep 2
+pgrep -x WhichMac | wc -l
+ls -d /Applications/WhichMac.app</code></pre><p class="expect"><span>Expected:</span> <code>1</code>, then <code>/Applications/WhichMac.app</code>.</p></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 6: Check that Open at Login is on</strong><p class="run">Run:</p><pre><code class="sh">sfltool dumpbtm 2&gt;/dev/null | grep -i -B2 -A6 whichmac || echo &#x27;sfltool unavailable without admin&#x27;</code></pre><p class="expect"><span>Expected:</span> an entry for <code>com.ollie.whichmac</code> whose disposition includes <code>enabled</code>. If <code>sfltool</code> needs admin rights, ask the user to click the name and confirm <strong>Open at Login</strong> is ticked, or check System Settings → General → Login Items.</p></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 7: Run the installer again while the app is running</strong><p class="run">Run:</p><pre><code class="sh">./install.sh
+sleep 2
+pgrep -x WhichMac | wc -l</code></pre><p class="expect"><span>Expected:</span> <code>1</code>: the old copy quit and exactly one new copy is running.</p></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 8: Uninstall, then reinstall</strong><p class="run">Run:</p><pre><code class="sh">./uninstall.sh
+pgrep -x WhichMac || echo not-running
+ls /Applications/WhichMac.app 2&gt;/dev/null || echo removed
+./install.sh</code></pre><p class="expect"><span>Expected:</span> <code>WhichMac removed.</code>, <code>not-running</code>, <code>removed</code>, then a normal install, which leaves the app installed at the end.</p></li>
+<li class="step"><input type="checkbox" disabled> <strong>Step 9: Commit</strong><pre><code class="sh">git add install.sh uninstall.sh README.md
+git commit -m &quot;Add install and uninstall scripts and README
+
+Co-Authored-By: Claude Opus 5.5 (1M context) &lt;noreply@anthropic.com&gt;&quot;</code></pre></li>
+</ol>
+</section>
+
+</main>
+</body>
+</html>
