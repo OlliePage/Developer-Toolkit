@@ -1,4 +1,5 @@
 import Foundation
+import ServiceManagement
 
 var failures = 0
 
@@ -22,6 +23,11 @@ expect(menuBarTitle(for: String(repeating: "a", count: 40)), String(repeating: "
 expect(menuBarTitle(for: "Office Mac mini " + String(repeating: "x", count: 30)), "Office Mac mini " + String(repeating: "x", count: 15) + "…", "keeps 31 characters then adds the ellipsis")
 
 expect(menuBarTitle(for: String(repeating: "a", count: 30) + " bbbbb"), String(repeating: "a", count: 30) + "…", "drops a trailing space before the ellipsis")
+
+expect(String(describing: loginItemAction(for: .notRegistered)), "register", "Open at Login registers when not registered")
+expect(String(describing: loginItemAction(for: .notFound)), "register", "Open at Login registers when the system has no record")
+expect(String(describing: loginItemAction(for: .enabled)), "unregister", "Open at Login unregisters when enabled")
+expect(String(describing: loginItemAction(for: .requiresApproval)), "openSystemSettings", "Open at Login opens System Settings when approval is needed")
 
 if failures > 0 {
     print("\(failures) failed")

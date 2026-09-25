@@ -15,8 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             NSApp.terminate(nil)
             return
         }
-        if args.contains("--enable-login-item") {
-            setLoginItem(enabled: true)
+        if args.contains("--enable-login-item"), SMAppService.mainApp.status != .enabled {
+            performLoginItemAction()
         }
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -45,12 +45,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let name = resolvedName(computerName: computerName, hostName: ProcessInfo.processInfo.hostName)
         statusItem.button?.title = menuBarTitle(for: name)
         nameItem.title = name
-        loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
+        switch SMAppService.mainApp.status {
+        case .enabled: loginItem.state = .on
+        case .requiresApproval: loginItem.state = .mixed
+        default: loginItem.state = .off
+        }
     }
 
     @objc private func toggleLoginItem() {
-        setLoginItem(enabled: SMAppService.mainApp.status != .enabled)
+        performLoginItemAction()
         refresh()
+    }
+
+    private func performLoginItemAction() {
+        switch loginItemAction(for: SMAppService.mainApp.status) {
+        case .register: setLoginItem(enabled: true)
+        case .unregister: setLoginItem(enabled: false)
+        case .openSystemSettings: SMAppService.openSystemSettingsLoginItems()
+        }
     }
 
     private func setLoginItem(enabled: Bool) {

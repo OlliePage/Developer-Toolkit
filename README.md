@@ -16,6 +16,9 @@ Builds the app (needs the Xcode command line tools: `xcode-select --install`),
 copies it to `/Applications`, launches it and turns on Open at Login. Safe to
 re-run to update.
 
+If **Open at Login** shows a dash instead of a tick, macOS wants your approval:
+clicking it opens System Settings → General → Login Items, where you allow it.
+
 The built app runs on Apple Silicon and Intel. To install on a Mac without the
 command line tools, copy `build/WhichMac.app` to its `/Applications` and open it
 once, then tick **Open at Login** in its menu.

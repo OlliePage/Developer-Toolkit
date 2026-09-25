@@ -3,5 +3,5 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 mkdir -p build
-xcrun swiftc Sources/NameFormatting.swift Tests/main.swift -o build/name-tests
+xcrun swiftc Sources/NameFormatting.swift Sources/LoginItemPolicy.swift Tests/main.swift -o build/name-tests
 ./build/name-tests
