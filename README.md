@@ -9,6 +9,7 @@ This is a curated list of software, tools, and applications I use daily in my te
 - [Security & Privacy](#security--privacy)
 - [Communication](#communication)
 - [Utilities](#utilities)
+- [My Own Tools](#my-own-tools)
 
 ## Productivity
 
@@ -349,6 +350,23 @@ Google's cloud storage and file synchronization service.
 # macOS (using Homebrew)
 brew install --cask google-drive
 ```
+
+## My Own Tools
+
+Small utilities I've built myself. Their source lives in this repo.
+
+### [WhichMac](which-mac/) - Machine Name in the Menu Bar
+Shows the Mac's Computer Name as text in the menu bar, e.g. `[OP] MacBook Air M2`.
+
+**Why I use it:** I hop between several Macs over Jump Desktop, and the machine name only flashes once on connect. With this, a glance at the menu bar says which machine I'm on.
+
+**Installation:**
+```bash
+# macOS 13+; needs the Xcode command line tools (xcode-select --install)
+git clone https://github.com/OlliePage/Developer-Toolkit.git
+cd Developer-Toolkit/which-mac && ./install.sh
+```
+Then ⌘-drag the name to the left end of the menu bar icons. If you use Bartender or another menu bar manager, make sure WhichMac isn't in its hidden section. See [which-mac/README.md](which-mac/README.md) for details.
 
 ## Complete Setup Script
 
