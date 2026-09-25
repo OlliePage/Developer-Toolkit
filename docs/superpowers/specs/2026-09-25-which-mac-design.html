@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WhichMac Design</title>
+<style>
+  :root {
+    --bg: #fbfbfa; --fg: #1d1d1f; --muted: #6e6e73; --rule: #e3e3e0;
+    --card: #ffffff; --accent: #0a66c2; --code-bg: #f1f1ef; --warn-bg: #fff6e5; --warn-rule: #e8b64c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161617; --fg: #ececec; --muted: #9a9aa0; --rule: #2e2e31;
+      --card: #1e1e20; --accent: #5aa9ff; --code-bg: #26262a; --warn-bg: #2a2416; --warn-rule: #a8823a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.6 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 48px 16px 80px; }
+  header { border-bottom: 1px solid var(--rule); padding-bottom: 20px; margin-bottom: 32px; }
+  h1 { font-size: 32px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -0.01em; }
+  .meta { color: var(--muted); font-size: 14px; }
+  h2 { font-size: 20px; margin: 40px 0 12px; }
+  p, ul, ol { margin: 0 0 14px; }
+  li { margin-bottom: 6px; }
+  code {
+    font: 0.88em ui-monospace, "SF Mono", Menlo, monospace;
+    background: var(--code-bg); padding: 1px 5px; border-radius: 4px;
+  }
+  .goal {
+    background: var(--card); border: 1px solid var(--rule); border-left: 4px solid var(--accent);
+    border-radius: 6px; padding: 14px 18px; margin: 0 0 14px;
+  }
+  .warn {
+    background: var(--warn-bg); border-left: 4px solid var(--warn-rule);
+    border-radius: 6px; padding: 12px 16px; margin: 0 0 14px;
+  }
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 15px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--rule); }
+  th { color: var(--muted); font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em; }
+  td:first-child { white-space: nowrap; }
+  .menubar {
+    font: 13px -apple-system, sans-serif; background: var(--card); border: 1px solid var(--rule);
+    border-radius: 6px; padding: 6px 12px; display: flex; gap: 14px; overflow-x: auto; white-space: nowrap;
+  }
+  .menubar .spacer { flex: 1; }
+  .menubar .me { background: var(--accent); color: #fff; border-radius: 4px; padding: 0 6px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>WhichMac</h1>
+    <div class="meta">Design spec · 2026-09-25 · repo <code>~/Developer/which-mac</code></div>
+  </header>
+
+  <h2>Problem</h2>
+  <p>When you switch between Macs in Jump Desktop, the machine name flashes once when you connect and is easy to miss. After that, nothing on screen says which Mac you're on.</p>
+
+  <h2>Goal</h2>
+  <div class="goal">After switching machines, one glance at the menu bar tells you which Mac you're on, with no clicks.</div>
+  <div class="menubar" aria-label="Menu bar mockup">
+    <span></span><span>Finder</span><span>File</span><span>Edit</span><span>View</span><span>Go</span>
+    <span class="spacer"></span>
+    <span class="me">[OP] MacBook Air M2</span><span>⌘</span><span>Wi‑Fi</span><span>Thu 14:02</span>
+  </div>
+
+  <h2>Constraints</h2>
+  <ul>
+    <li>Apps can only put items in the right-hand group of the menu bar. The item will sit at the <strong>left end of that group</strong>. You set that once with ⌘-drag and macOS remembers it.</li>
+  </ul>
+  <div class="warn">On a notched or crowded menu bar, macOS hides right-hand items that don't fit, and no app can prevent that. We're accepting that risk. If it becomes a problem, the fallback is a floating label drawn over the bar, which is out of scope for now.</div>
+
+  <h2>Behaviour</h2>
+  <ul>
+    <li>The item's text is the Mac's <strong>Computer Name</strong> (<code>Host.current().localizedName</code>, the value in System Settings → General → Sharing). It's plain text in the standard menu bar font, with no icon.</li>
+    <li>No Dock icon and no windows (<code>LSUIElement</code>).</li>
+    <li>Clicking the item opens a menu:
+      <ol>
+        <li>The full name, greyed out, for when the bar truncates it.</li>
+        <li>A divider line.</li>
+        <li><strong>Open at Login</strong>: the checkmark shows <code>SMAppService.mainApp.status == .enabled</code>, and clicking registers or unregisters. If that fails, the app re-reads the status so the checkmark stays accurate, and logs the error with <code>NSLog</code>.</li>
+        <li><strong>Quit WhichMac</strong> (⌘Q).</li>
+      </ol>
+    </li>
+    <li>The app re-reads the name each time you open the menu and updates the item, so a rename shows up without a restart. If the Computer Name can't be read, it shows the host name from <code>ProcessInfo</code> instead.</li>
+  </ul>
+
+  <h2>Components</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>File</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>Sources/main.swift</code></td><td>The whole app: an <code>AppDelegate</code> that owns the <code>NSStatusItem</code>, its menu and the Open at Login switch.</td></tr>
+      <tr><td><code>Resources/Info.plist</code></td><td>App ID <code>com.ollie.whichmac</code>, <code>LSUIElement = true</code>, needs macOS 13 or later (for <code>SMAppService</code>).</td></tr>
+      <tr><td><code>build.sh</code></td><td>Runs <code>swiftc</code> for arm64 and x86_64, combines them with <code>lipo</code> into one universal binary, assembles <code>build/WhichMac.app</code> and signs it locally with <code>codesign</code>.</td></tr>
+      <tr><td><code>install.sh</code></td><td>Runs <code>build.sh</code>, quits any running copy, replaces <code>/Applications/WhichMac.app</code>, launches it and turns on Open at Login. Safe to run again.</td></tr>
+      <tr><td><code>uninstall.sh</code></td><td>Turns off Open at Login, quits the app and removes it from <code>/Applications</code>.</td></tr>
+      <tr><td><code>README.md</code></td><td>How to install, place the item with ⌘-drag and uninstall, plus the note about notched screens.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="margin-top:14px">To turn on Open at Login from <code>install.sh</code>, the app accepts a <code>--enable-login-item</code> flag that registers <code>SMAppService.mainApp</code> when it launches. <code>install.sh</code> runs <code>open /Applications/WhichMac.app --args --enable-login-item</code>.</p>
+
+  <h2>Out of scope</h2>
+  <p>Custom text or nicknames, colours, the floating label, automatic updates, Apple notarisation.</p>
+
+  <h2>Testing</h2>
+  <p>There's almost no logic to test, so it's checked end-to-end on this Mac:</p>
+  <ol>
+    <li><code>./build.sh</code> succeeds, <code>lipo -archs</code> reports <code>x86_64 arm64</code>, and <code>codesign -v</code> passes.</li>
+    <li><code>./install.sh</code> succeeds, the app is running, and a screenshot of the menu bar shows the computer name.</li>
+    <li>Open at Login is on after installing: the menu checkmark shows it, and it's listed in System Settings → Login Items.</li>
+    <li>Running <code>./install.sh</code> a second time also succeeds.</li>
+  </ol>
+</main>
+</body>
+</html>
